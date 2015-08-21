@@ -22,9 +22,30 @@ import java.lang.Thread.UncaughtExceptionHandler;
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadMXBean;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 abstract class ConditionAwaiter implements UncaughtExceptionHandler {
-    private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
+    private final static class ConditionAwaiterThreadFactory implements ThreadFactory {
+      private static final AtomicInteger poolNumber = new AtomicInteger(1);
+      private final String namePrefix;
+      private final AtomicInteger threadNumber = new AtomicInteger(1);
+  
+      ConditionAwaiterThreadFactory() {
+        namePrefix = ConditionAwaiter.class.getSimpleName() + "-" + poolNumber.getAndIncrement() + "-" ;  
+      }
+  
+      public Thread newThread(Runnable r) {
+          Thread t = new Thread(r,  namePrefix + threadNumber.getAndIncrement());
+          if (t.isDaemon())
+              t.setDaemon(false);
+          if (t.getPriority() != Thread.NORM_PRIORITY)
+              t.setPriority(Thread.NORM_PRIORITY);
+          return t;
+      }
+    }
+
+    private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(1, 
+        new ConditionAwaiterThreadFactory());
     private final CountDownLatch latch;
     private Throwable throwable = null;
     private final ConditionSettings conditionSettings;
